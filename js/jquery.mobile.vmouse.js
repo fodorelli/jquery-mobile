@@ -39,7 +39,8 @@ var dataPropertyName = "virtualMouseBindings",
 	eventCaptureSupported = "addEventListener" in document,
 	$document = $( document ),
 	nextTouchID = 1,
-	lastTouchID = 0, threshold;
+	lastTouchID = 0, threshold,
+	touchStartNode = null;
 
 $.vmouse = {
 	moveDistanceThreshold: 10,
@@ -224,7 +225,7 @@ function handleTouchStart( event ) {
 
 			lastTouchID = nextTouchID++;
 			$.data( target, touchTargetPropertyName, lastTouchID );
-
+			touchStartNode = target;
 			clearResetTimer();
 
 			disableMouseBindings();
@@ -284,26 +285,34 @@ function handleTouchEnd( event ) {
 	disableTouchBindings();
 
 	var flags = getVirtualBindingFlags( event.target ),
-		t;
+		t, rect, threshold;
 	triggerVirtualEvent( "vmouseup", event, flags );
 
 	if ( !didScroll ) {
-		var ve = triggerVirtualEvent( "vclick", event, flags );
-		if ( ve && ve.isDefaultPrevented() ) {
-			// The target of the mouse events that follow the touchend
-			// event don't necessarily match the target used during the
-			// touch. This means we need to rely on coordinates for blocking
-			// any click that is generated.
-			t = getNativeEvent( event ).changedTouches[ 0 ];
-			clickBlockList.push({
-				touchID: lastTouchID,
-				x: t.clientX,
-				y: t.clientY
-			});
+		t = getNativeEvent( event ).changedTouches[ 0 ];
+		
+		rect = touchStartNode.getBoundingClientRect();
+		threshold = $.vmouse.clickDistanceThreshold;
+		
+		if (t.pageX > rect.left - threshold && t.pageX < rect.right + threshold
+			&& t.pageY > rect.top - threshold && t.pageY < rect.bottom + threshold) {
 
-			// Prevent any mouse events that follow from triggering
-			// virtual event notifications.
-			blockMouseTriggers = true;
+			var ve = triggerVirtualEvent( "vclick", event, flags );
+			if ( ve && ve.isDefaultPrevented() ) {
+				// The target of the mouse events that follow the touchend
+				// event don't necessarily match the target used during the
+				// touch. This means we need to rely on coordinates for blocking
+				// any click that is generated.
+				clickBlockList.push({
+					touchID: lastTouchID,
+					x: t.clientX,
+					y: t.clientY
+				});
+	
+				// Prevent any mouse events that follow from triggering
+				// virtual event notifications.
+				blockMouseTriggers = true;
+			}
 		}
 	}
 	triggerVirtualEvent( "vmouseout", event, flags);
